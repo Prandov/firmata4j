@@ -59,7 +59,8 @@ import static org.firmata4j.ssd1306.SSD1306MessageFactory.*;
 public class SSD1306 {
 
     private final I2CDevice device;
-
+    // I2CDevice *Type
+    // device *Property name
     private final Size size;
 
     private final MonochromeCanvas canvas;

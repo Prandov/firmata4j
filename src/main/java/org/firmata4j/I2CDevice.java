@@ -77,7 +77,8 @@ public interface I2CDevice {
      * @throws IOException when I2C device cannot be asked for data due to 
      * communication fail
      */
-    void ask(int register, byte responseLength, I2CListener listener) throws IOException;
+    void ask(int register,byte responseLength, I2CListener listener) throws IOException;
+
 
     /**
      * Registers a listener as a receiver of regular updates from I2C device.

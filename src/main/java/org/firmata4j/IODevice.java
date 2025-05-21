@@ -119,7 +119,8 @@ public interface IODevice {
      *
      * @param listener the listener
      */
-    void addEventListener(IODeviceEventListener listener);
+    //void addEventListener(I2CListener listener); //from my project
+    void addEventListener(IODeviceEventListener listener); //From Github
 
     /**
      * Removes the specified listener so that it no longer receives events from

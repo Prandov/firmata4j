@@ -73,7 +73,7 @@ public class FirmataDevice implements IODevice {
     private final Map<Byte, FirmataI2CDevice> i2cDevices = new HashMap<>();
     private volatile Map<String, Object> firmwareInfo;
     private volatile Map<Integer, Integer> analogMapping;
-    
+
     private static final ThreadFactory THREAD_FACTORY = new DaemonThreadFactory("firmata-event-handler");
     private static final long TIMEOUT = 15000L;
     private static final Logger LOGGER = LoggerFactory.getLogger(FirmataDevice.class);
@@ -268,7 +268,7 @@ public class FirmataDevice implements IODevice {
     public void addProtocolMessageHandler(String messageType, Consumer<Event> handler) {
         protocol.addHandler(messageType, handler);
     }
-    
+
     //TODO add get firmware method
 
     @Override
@@ -399,7 +399,7 @@ public class FirmataDevice implements IODevice {
             }
         }
     };
-    
+
     /**
      * Called when capabilities for the all the pins are received.
      */

@@ -60,7 +60,8 @@ public class ParsingI2CMessageState extends AbstractState {
         if (b == END_SYSEX) {
             byte[] buffer = convertI2CBuffer(getBuffer());
             byte address = buffer[0];
-            byte register = buffer[1];
+//            byte register = buffer[1];
+            int register = buffer[1]; //was throwing an error Not sure if this will copy buffer[1,2] into an int
             byte[] message = new byte[buffer.length - 2];
             System.arraycopy(buffer, 2, message, 0, buffer.length - 2);
             Event event = new Event(I2C_MESSAGE);
