@@ -1,5 +1,6 @@
 package org.firmata4j.SGP30;
 
+import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
 import org.firmata4j.IODevice;
@@ -30,15 +31,9 @@ import java.util.Arrays; //2025JS
 */
 
 public class SGP30 {
-    //private  -  Only accessible within the declared class
-    //static  -  Attributes and methods belongs to the class, rather than an object
-    //final  -  Attributes and methods cannot be overridden/modified
-    //volatile  -  Value is not cached thread-locally, and is always read from "main memory"
-    //protected	 -  The code is accessible in the same package and subclasses.
     private I2CDevice sgp30Device; //25-03-21
     private SGP30Listener sgp30Listener; //25-03-21
-    //private final SensorI2CListener myI2CListener; //2024JS
-    protected byte[] i2cReceivedData; //data received from the i2c listener object, could also be make it a property of the listener object
+    protected byte[] i2cReceivedData;
     volatile boolean newDataAvailable = false;
     int[] receivedSensorData;
 
@@ -50,49 +45,12 @@ public class SGP30 {
 
     private int crc8Init;
 
-    //private int[] serial; //set by calling loadSerial()
-    public final int[] serial; //set by calling loadSerial()
+    public final int[] serial;
 
     private int crc8Polynomial;
-    //private int[] featureset;
     public final int[] featureSet;
+    private volatile int[] lastIaqMeasurement;
 
-
-
-
-    /**
-     * Advanced constructor that defines non default values.
-     * //@param address I2C address to use for communication with abc.SGP30
-     * //@param wordLen Word length of abc.SGP30 communication (usually 2)
-     * //@param busNo   Bus no. used by the abc.SGP30, by default the Raspberry Pi will only have I2C bus 1 enabled
-     * @param //myI2CListener Listener that will receive data back from the Sensor. //2025EP
-     * @throws IOException                              could not read from abc.SGP30
-     * @throws InterruptedException                     interrupted during delay
-     * //@throws I2CFactory.UnsupportedBusNumberException wrong bus no
-     */
-//OLD   public SGP30(int address, int wordLen, int busNo) throws IOException, I2CFactory.UnsupportedBusNumberException, InterruptedException {
-//OLD   public SGP30(int address, int wordLen, int busNo) throws IOException, InterruptedException {
-//OLD   public SGP30(I2CDevice device, int wordLen, int busNo) throws IOException, InterruptedException {
-//EP25 public SGP30(I2CDevice device, int wordLen, int busNo,SensorI2CListener myI2CListener) throws IOException, InterruptedException { //2025JS
-//    public SGP30(I2CDevice device, int wordLen, int busNo, SGP30Listener myI2CListener) throws IOException, InterruptedException { //2025JS
-//            this.i2cDevice =  device;
-//            this.myI2CListener = myI2CListener;
-//            this.device.subscribe(myI2CListener);
-//            this.address = 0x58; //0x58
-//            this.wordLen = wordLen; //2
-//            this.busNo = busNo; //1
-//
-//
-//
-//
-//        initialiseDevice();
-//        loadSerial();
-//        loadFeatureset();
-//        if (IntStream.of(possibleFeatureSets).noneMatch(x -> x == featureset[0])) { //changed Modules Language Level to 10 to support lambda
-//            throw new RuntimeException("Unknown featureset");
-//        }
-//        iaqInit();
-//    }
     /**
      * Default constructor with default values for address, word and bus
      * abc.SGP30 sensor will almost always have 0x58 as address and a wordLength of 2
@@ -112,44 +70,17 @@ public class SGP30 {
 
         sgp30Device = arduinoObj.getI2CDevice(address);
         sgp30Listener = new SGP30Listener(this);
-        sgp30Device.subscribe(sgp30Listener);
-
-//        // Step 1: Set up the SGP30 sensor as an I2C device
-//        i2cDevice = arduinoObj.getI2CDevice(SGP30Token.SGP30_ADDR);
-//        // Step 2: Create a listener for I2C events
-//        //this.myI2CListener = new SGP30Listener( this, this.i2cDevice);//(this.i2cDevice);
-//        myI2CListener = new SGP30Listener( this.i2cDevice);
-//        // Step 3: Subscribe the listener to the I2C device
-//        this.i2cDevice.subscribe(myI2CListener);
 
         this.serial = loadSerial();
         Thread.sleep(50);
         this.featureSet = loadFeatureset();
         Thread.sleep(50);
-        //initialiseDevice();
-
-
 
         if (IntStream.of(possibleFeatureSets).noneMatch(x -> x == featureSet[0])) {
             throw new RuntimeException("Unknown featureset");
         }
         iaqInit();
     }
-    /**
-     * Initialises a new I2C device
-     *
-     * @throws IOException  could not get abc.SGP30 instance on I2C bus
-     * //@throws I2CFactory.UnsupportedBusNumberException wrong bus no
-     */
-
-    private void initialiseDevice() throws IOException, InterruptedException {
-        System.out.println("Method#1: initialiseDevice()");
-        loadSerial();
-        System.out.println("SGP30 Serial #: " + Arrays.toString(serial));
-        loadFeatureset();
-    }
-    //OLD    private void initialiseDevice() throws IOException, I2CFactory.UnsupportedBusNumberException {
-
     /**
      * Gets the current TVOC value
      *
@@ -159,7 +90,7 @@ public class SGP30 {
      */
     public int getTVOC() throws IOException, InterruptedException {
         System.out.println("Method#2: getTVOC()");
-        return iaqMeasure()[1];
+        return getAirQuality()[1];
     }
 
     /**
@@ -183,7 +114,20 @@ public class SGP30 {
      */
     public int getECO2() throws IOException, InterruptedException {
         System.out.println("Method#4: getECO2()");
-        return iaqMeasure()[0];
+        return getAirQuality()[0];
+    }
+
+    public int[] getAirQuality() throws IOException, InterruptedException {
+        int[] measurement = iaqMeasure();
+        lastIaqMeasurement = measurement;
+        return Arrays.copyOf(measurement, measurement.length);
+    }
+
+    public int[] getLastAirQuality() {
+        if (lastIaqMeasurement == null) {
+            return null;
+        }
+        return Arrays.copyOf(lastIaqMeasurement, lastIaqMeasurement.length);
     }
 
     /**
@@ -215,7 +159,6 @@ public class SGP30 {
         int typDelay = 2; // Typ.2ms
         int maxDelay = 10; // Max.10ms
         byte replySz = 0; // No Response
-        //readWordsFromCommand(new byte[]{0x20, 0x03}, 10, 0);
         sensorCommandSendOrReceive(command, maxDelay, (byte) 0);
     }
     /**
@@ -416,22 +359,28 @@ public class SGP30 {
      * @throws IOException          could not read from abc.SGP30
      * @throws InterruptedException interrupted during delay
      */
-    //private int[] readWordsFromCommand(byte[] command, int delay, int replySize) throws IOException, InterruptedException {
-        private int[] sensorCommandSendOrReceive(int command, int maxDelay, byte replySize, byte... bytesToSend) throws IOException, InterruptedException {
-
+    /**
+     * Sends a single SGP30 command and optionally waits for a reply.
+     *
+     * <p>Firmata I2C reads are asynchronous. This method writes the command with
+     * {@code tell(...)}, waits for the sensor's execution time, then calls
+     * {@code ask(...)} to request the reply. The response does not come back as
+     * the return value of {@code ask(...)}. Instead, Firmata delivers the bytes
+     * later through {@code I2CListener.onReceive()}, and the listener stores the
+     * parsed result on this {@code SGP30} instance.</p>
+     *
+     * <p>This helper wraps that event-driven flow in a blocking method so the
+     * example can expose a simple sensor API.</p>
+     */
+    private int[] sensorCommandSendOrReceive(int command, int maxDelay, byte replySize, byte... bytesToSend) throws IOException, InterruptedException {
         // A. Clear new data flag
         newDataAvailable = false;
+        receivedSensorData = null;
         // B. send the command to the device
-            //i2cDevice.ask(command, replySize, sgp30Listener);
             byte[] commandBytes = new byte[] {
                 (byte) ((command >> 8) & 0xFF),
                 (byte) (command & 0xFF)
             };
-
-//            byte[] combinedBytes = new byte[commandBytes.length + sendBytes.length];
-//            System.arraycopy(commandBytes, 0, combinedBytes, 0, commandBytes.length);
-//            System.arraycopy(sendBytes, 0, combinedBytes, commandBytes.length, sendBytes.length);
-//            sgp30Device.tell(combinedBytes);
 
             System.out.println("I2C 'tell' Command");
             sgp30Device.tell(commandBytes);
@@ -439,24 +388,20 @@ public class SGP30 {
                 sgp30Device.tell(bytesToSend);
             }
             if (replySize > 0) {    //Required because iaqInit has no reply
-                sgp30Device.ask(replySize, sgp30Listener);
+                Thread.sleep(maxDelay);
                 System.out.println("I2C 'ask' Command");
                 sgp30Device.ask(replySize,sgp30Listener);
         // C. Wait for data back, maybe check the new data flag every millisecond
                 int i = 0;
-                try {
-                    while (!newDataAvailable && i < maxDelay) {
-                        Thread.sleep(1);
-                        i++;
-                    }
-                    Thread.sleep(500);
-                    if (!newDataAvailable) {
-                        //throw new Exception("Sensor read error: No data received within the command maximum response time");
-                        throw new Exception(String.format("Sensor Command 0x%04X error: No data received within the command maximum response time %d ms", command, maxDelay));
-                    }
-                } catch (Exception e) {
-                    System.err.println(e.getMessage());
-                    // Handle the error appropriately (e.g., retry, log, etc.)
+                while (!newDataAvailable && i < maxDelay) {
+                    Thread.sleep(1);
+                    i++;
+                }
+                if (!newDataAvailable || receivedSensorData == null) {
+                    throw new IOException(
+                            String.format("Sensor command 0x%04X timed out after %d ms waiting for I2C data", command, maxDelay),
+                            new TimeoutException("No I2C response received")
+                    );
                 }
             } else {
                 System.out.println("No reply expected for this Command");
@@ -465,42 +410,7 @@ public class SGP30 {
             //Thread.sleep(10); //Stuff was out of order on the console so this hopefully slows it down
         // D. get the data and process it.
             return receivedSensorData;
-        }
-
-//        //James's method
-//        // 1. Tell the chip.
-//        try{
-//            i2cDevice.tell((byte) command);
-//            System.out.println("I2C telling...");
-//        }        catch (IOException e){
-//            throw new RuntimeException(e);
-//        }
-//
-//        // 2. Pause briefly.
-//        Thread.sleep(delay);
-//
-//        // 3. listen.  (ask)
-//        try {
-//            i2cDevice.ask(command,(byte) replySize, myI2CListener);
-//            System.out.println("I2C asking...");
-//
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
-//
-//        Thread.sleep(20);
-//        System.out.println("The BMP280 address: (after asking...): 0x" + toHexString(i2cDevice.getAddress()));
-
-/*
-  To get data back to your main program from a listener use a:
-  1. Shared Data Structure:
-  Use a shared variable or a thread-safe data structure (like ConcurrentHashMap or BlockingQueue)
-  to store the data received by the listener. The main program can then periodically check this structure for new data.
-  2. Callback Mechanism:
-  Define a callback interface that the main program implements.
-  The listener can then call the appropriate method on this interface whenever new data is received.
-  This approach is more event-driven and can be more efficient.
-*/
+    }
 
 
 
@@ -511,36 +421,15 @@ public class SGP30 {
         this.i2cReceivedData = data;
     }
 
-// CRC method using Words(int16) instead of bytes(int8)
-//
-//        byte readSize = (byte) (replySize * (wordLen + 1));
-//        byte[] crcResponse = new byte[readSize];
-//
-//        device.ask(readSize, (I2CListener) event -> {
-//            crcResponse = event.getData();
-//            System.out.println("Ask Response %s" + crcResponse);
-//            int[] intResponse = new int[readsize];
-//            for (int i = 0; i < crcResponse.length; i++) {
-//                intResponse[i] = crcResponse[i] & 0xFF;
-//            }
-//            int[] result = new int[replySize];
-//            for (int i = 0; i < replySize; i++) {
-//                int[] word = new int[]{intResponse[3 * i], intResponse[3 * i + 1]};
-//                int crc = intResponse[3 * i + 2];
-//                int crcCheck = generateCrc(word);
-//                if (crcCheck != crc) {
-//                    System.out.println("CRC Error");
-//                   // throw new IOException("CRC error " + crc + " != " + crcCheck + " for crc check " + i);
-//                }
-//                result[i] = (word[0] << 8 | word[1]);
-//            }
-//            System.out.println("Ask Response %d" + result);
-//           return result;
-
-
-//    void processData(byte[] crcResponse, byte replySize) {
+    /**
+     * Decodes the raw SGP30 payload delivered by the I2C listener.
+     *
+     * <p>Each SGP30 word is returned as two data bytes followed by a CRC byte:
+     * {@code [MSB, LSB, CRC]}. This method validates the CRC for each word,
+     * converts the payload into integer sensor values, and publishes the parsed
+     * result back to the waiting request method.</p>
+     */
     void processData(byte[] crcResponse) {
-//            System.out.println("Ask Response %s" + crcResponse);
         System.out.println("Process the Received Data");
         System.out.println("-Response bytes with CRC byte: " + Arrays.toString(crcResponse));
             int replyLength = crcResponse.length;
@@ -566,7 +455,6 @@ public class SGP30 {
                     byteResult[i / 3 * 2 + 1] = (byte) (word[1] & 0xFF);
                 }
             }
-            //System.out.println("Ask Response %d" + intResult);
         System.out.println("-Response integer data: " + Arrays.toString(intResult));
         System.out.println("-Response byte data:    " + Arrays.toString(byteResult));
 
@@ -606,25 +494,4 @@ public class SGP30 {
         }
         return crc & 0xFF;
     }
-
-
-
-
-//    public void resetSGP30() throws IOException, InterruptedException {
-//        byte[] command = new byte[]{0x0006};
-//        readWordsFromCommand(command, 10, 0);
-//    } //End_of resetSGP30 method
-
-
-    // Try to implement the listener interface right from the SGP30Class
-//        @Override
-//        public byte[] onReceive(I2CEvent event) {
-//            return new byte[0];
-//        }
-    // 2025-03-11
-//    @Override
-//    public void onI2CMessageReceived(I2CMessageEvent event) {
-//        byte[] data = event.getData();
-//        processData(data);
-//    }
 } //End_of SGP30 Class
