@@ -130,6 +130,25 @@ public class FirmataI2CDevice implements I2CDevice {
         I2CEvent evt = new I2CEvent(this, register, message);
         I2CListener listener = callbacks.remove(register);
         if (listener == null) {
+            /*
+             * Some Firmata I2C implementations report register-less reads with
+             * register 0x00 in the reply, even when the original request used
+             * REGISTER_NOT_SET (-1). Fall back to the no-register callback so
+             * one-shot reads still reach their listener.
+             *
+             * In other words:
+             * - On the Firmata wire protocol side, a register-less reply may be
+             *   reported back as register 0x00.
+             * - Inside firmata4j, register-less requests are tracked with the
+             *   sentinel REGISTER_NOT_SET (-1).
+             *
+             * This was added while troubleshooting the SGP30 example, where the
+             * sensor reply arrived as register 0x00 and otherwise bypassed the
+             * waiting one-shot listener.
+             */
+            listener = callbacks.remove(REGISTER_NOT_SET);
+        }
+        if (listener == null) {
             for (I2CListener subscriber : subscribers) {
                 subscriber.onReceive(evt);
             }

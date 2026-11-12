@@ -5,6 +5,9 @@
 written in Java. The library allows controlling Arduino (or another board) which
 runs Firmata protocol from your java program.
 
+The default serial transport is backed by `jSerialComm`, which improves support
+for newer platforms such as Apple Silicon and Windows on ARM.
+
 ## Capabilities
 - Interaction with a board and its pins in object-oriented style
 - Communication over serial port, network or custom transport layer

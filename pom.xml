@@ -33,26 +33,21 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.resource.directory>src/main/resources</project.resource.directory>
         <test.resource.directory>src/test/resources</test.resource.directory>
-        <jssc.version>2.9.4</jssc.version>
+        <jserialcomm.version>2.11.4</jserialcomm.version>
+        <slf4j.version>1.7.36</slf4j.version>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>io.github.java-native</groupId>
-            <artifactId>jssc</artifactId>
-            <version>${jssc.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.fazecast</groupId>
             <artifactId>jSerialComm</artifactId>
-            <version>2.6.2</version>
-            <optional>true</optional>
+            <version>${jserialcomm.version}</version>
         </dependency>
         
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.25</version>
+            <version>${slf4j.version}</version>
         </dependency>
 
         <dependency>
@@ -65,7 +60,7 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <scope>test</scope>
-            <version>1.7.25</version>
+            <version>${slf4j.version}</version>
         </dependency>
         
     </dependencies>

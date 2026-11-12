@@ -5,6 +5,7 @@ import org.firmata4j.IODevice;
 import org.firmata4j.firmata.FirmataDevice;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 public class SGP30Example {
     /**
@@ -17,7 +18,7 @@ public class SGP30Example {
      * listener callback.</p>
      */
     public static void main(String[] args) throws InterruptedException, IOException {
-        String myUSBPort = "COM4";
+        String myUSBPort = "COM5";
         final IODevice arduinoBoard = new FirmataDevice(myUSBPort);
 
         arduinoBoard.start();
@@ -29,7 +30,7 @@ public class SGP30Example {
 
         System.out.println("CO2 Sensor Object Created");
         int[] serialNumber = sgp30.getSerial();
-        System.out.println("My Serial # " + serialNumber);
+        System.out.println("My Serial # " + Arrays.toString(serialNumber));
 
         while (true){
             Thread.sleep(2000);

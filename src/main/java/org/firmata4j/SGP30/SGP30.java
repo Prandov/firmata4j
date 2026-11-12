@@ -1,11 +1,14 @@
 package org.firmata4j.SGP30;
 
+import java.math.BigInteger;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
 import org.firmata4j.IODevice;
 
 import org.firmata4j.I2CDevice;
+import org.firmata4j.I2CEvent;
+import org.firmata4j.I2CListener;
 import org.slf4j.Logger; //2025JS
 import org.slf4j.LoggerFactory; //2025JS
 import java.io.IOException; //2025JS
@@ -33,12 +36,13 @@ import java.util.Arrays; //2025JS
 public class SGP30 {
     private I2CDevice sgp30Device; //25-03-21
     private SGP30Listener sgp30Listener; //25-03-21
-    protected byte[] i2cReceivedData;
     volatile boolean newDataAvailable = false;
     int[] receivedSensorData;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SGP30.class); //Final
     private static final int[] possibleFeatureSets = new int[]{0x0020, 0x0022};
+    private static final int I2C_RESPONSE_TIMEOUT_MS = 250;
+    // Reserved for a future sensor base pattern that can expose shared bus and payload metadata.
     private byte address;
     private int wordLen;
     private int busNo;
@@ -69,7 +73,9 @@ public class SGP30 {
         this.crc8Polynomial = 0x31;
 
         sgp30Device = arduinoObj.getI2CDevice(address);
-        sgp30Listener = new SGP30Listener(this);
+        sgp30Listener = new SGP30Listener();
+
+        LOGGER.info("Initializing SGP30 on I2C address 0x{}", toHex(address & 0xFF));
 
         this.serial = loadSerial();
         Thread.sleep(50);
@@ -77,8 +83,10 @@ public class SGP30 {
         Thread.sleep(50);
 
         if (IntStream.of(possibleFeatureSets).noneMatch(x -> x == featureSet[0])) {
+            LOGGER.error("Unknown SGP30 feature set 0x{}", toHex(featureSet[0]));
             throw new RuntimeException("Unknown featureset");
         }
+        LOGGER.info("Detected SGP30 feature set 0x{}", toHex(featureSet[0]));
         iaqInit();
     }
     /**
@@ -89,7 +97,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     public int getTVOC() throws IOException, InterruptedException {
-        System.out.println("Method#2: getTVOC()");
+        LOGGER.debug("Reading TVOC from SGP30");
         return getAirQuality()[1];
     }
 
@@ -101,7 +109,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     public int getBaseLineTVOC() throws IOException, InterruptedException {
-        System.out.println("Method#3: getBaseLineTVOC()");
+        LOGGER.debug("Reading TVOC baseline from SGP30");
         return getIaqBaseLine()[1];
     }
 
@@ -113,13 +121,14 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     public int getECO2() throws IOException, InterruptedException {
-        System.out.println("Method#4: getECO2()");
+        LOGGER.debug("Reading eCO2 from SGP30");
         return getAirQuality()[0];
     }
 
     public int[] getAirQuality() throws IOException, InterruptedException {
         int[] measurement = iaqMeasure();
         lastIaqMeasurement = measurement;
+        LOGGER.info("SGP30 air quality reading: eCO2={} ppm, TVOC={}", measurement[0], measurement[1]);
         return Arrays.copyOf(measurement, measurement.length);
     }
 
@@ -138,12 +147,12 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     public int getBaseLineECO2() throws IOException, InterruptedException {
-        System.out.println("Method 5#: getBaseLineECO2()");
+        LOGGER.debug("Reading eCO2 baseline from SGP30");
         return getIaqBaseLine()[0];
     }
 
     public int[] getSerial() {
-        System.out.println("Method 6#: getSerial()");
+        LOGGER.debug("Returning cached SGP30 serial number");
         return serial;
     }
     /**
@@ -152,7 +161,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     private void iaqInit() throws IOException, InterruptedException {
-        System.out.println("Command #1. Init_air_quality");
+        LOGGER.info("Sending SGP30 IAQ init command");
 // 1. Init_air_quality = 0x2003;      // No Response                // ExecutionTime: Typ.2ms   Max.10ms
 
         int command = 0x2003;
@@ -169,7 +178,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     private int[] iaqMeasure() throws IOException, InterruptedException {
-        System.out.println("Command #2. Measure_air_quality");
+        LOGGER.debug("Requesting SGP30 air quality measurement");
 // 2. Measure_air_quality = 0x2008;   // Reply: 6 bytes inc. CRC    // ExecutionTime: Typ.10ms  Max.12ms
         int command = 0x2008;
         int typDelay = 10; // Typ.10ms
@@ -185,7 +194,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     private int[] getIaqBaseLine() throws IOException, InterruptedException {
-        System.out.println("Command #3. Get_iaqBaseline");
+        LOGGER.debug("Requesting SGP30 IAQ baseline");
 //3. Get_iaqBaseline = 0x2015;       // Reply: 6 bytes inc. CRC    // ExecutionTime: Typ.1ms   Max.10ms
         int command = 0x2015;
         int typDelay = 1; // Typ.1ms
@@ -203,8 +212,9 @@ public class SGP30 {
      */
     public void setIaqBaseline(int eCO2, int TVOC) throws IOException, InterruptedException {
 // 4. Set_iaqBaseline = 0x201E;       // Send: 6 bytes inc. CRC     // ExecutionTime: Typ.1ms   Max.10ms
-        System.out.println("Command #4. Set_iaqBaseline()");
+        LOGGER.info("Setting SGP30 IAQ baseline: eCO2={}, TVOC={}", eCO2, TVOC);
         if (eCO2 == 0 || TVOC == 0) {
+            LOGGER.warn("Rejected invalid SGP30 baseline values: eCO2={}, TVOC={}", eCO2, TVOC);
             throw new RuntimeException("Invalid baseline values");
         }
         int commandID = 0x201E;
@@ -240,6 +250,7 @@ public class SGP30 {
      */
     public void setIaqHumidity(int gramsPM3) throws IOException, InterruptedException {
 // 5. Set_absHumidity = 0x2061;       // Send 3 bytes inc. CRC      // ExecutionTime: Typ.1ms   Max.10ms
+        LOGGER.info("Setting SGP30 humidity compensation to {} g/m3", gramsPM3);
         int command = 0x2061;
         int typDelay = 1; // Typ.1ms
         int maxDelay = 10; // Max.10ms
@@ -260,6 +271,7 @@ public class SGP30 {
      */
     public int[] measureTest() throws IOException, InterruptedException {
 //6. Measure_test = 0x2032;          // Reply: 3 bytes inc. CRC.   // ExecutionTime: Typ.200ms Max.220ms On chip self test returns 0xD400
+        LOGGER.info("Running SGP30 self-test");
         int command = 0x2032;
         int typDelay = 200; // Typ.20ms
         int maxDelay = 220; // Max.220ms
@@ -275,7 +287,7 @@ public class SGP30 {
      */
     private int[] loadFeatureset() throws IOException, InterruptedException {
 // 7. Get_featureSet = 0x202F;        // Reply: 3 bytes inc. CRC    // ExecutionTime: Typ.1ms   Max.10ms
-        System.out.println("Method#3: loadFeatureset()");
+        LOGGER.debug("Loading SGP30 feature set");
         int command = 0x202F;
         int typDelay = 1; // Typ.1ms
         int maxDelay = 10; // Max.10ms
@@ -291,7 +303,7 @@ public class SGP30 {
      */
     private int[] measureRaw() throws IOException, InterruptedException {
 // 8. Measure_rawSignals = 0x2050;    // Reply: 6 bytes inc. CRC    // ExecutionTime: Typ.20ms  Max.25ms
-        System.out.println("Method#8: measureRaw()");
+        LOGGER.debug("Requesting SGP30 raw signal measurement");
         int command = 0x2050;
         int typDelay = 20; // Typ.20ms
         int maxDelay = 25; // Max.25ms
@@ -306,7 +318,7 @@ public class SGP30 {
      * @throws InterruptedException interrupted during delay
      */
     private int[] getTvocInceptiveBaseline() throws IOException, InterruptedException {
-        System.out.println("Method 9#: getTvocInceptiveBaseline()");
+        LOGGER.debug("Requesting SGP30 TVOC inceptive baseline");
 // 9. Get_tvocInceptiveBaseline = 0x20b3 // Reply: 3 bytes inc. CRC // ExecutionTime: Typ.1ms   Max.10ms
         int command = 0x20B3;
         int typDelay = 1; // Typ.1ms
@@ -323,6 +335,7 @@ public class SGP30 {
      */
     public void setTvocBaseline(int PPM) throws IOException, InterruptedException {
 // 10.Set_tvocBaseline = 0x2077       // Send 3 bytes inc. CRC      // ExecutionTime: Typ.1ms   Max.10ms
+        LOGGER.info("Setting SGP30 TVOC baseline to {}", PPM);
         int command = 0x2077;
         int typDelay = 1; // Typ.1ms
         int maxDelay = 10; //Max.10ms
@@ -343,7 +356,7 @@ public class SGP30 {
      */
     private int[] loadSerial() throws IOException, InterruptedException {
 // 11.Get_serial_ID = 0x3682;         // Reply: 9 bytes inc. CRC    // ExecutionTime: Typ.10ms  Max.12ms
-        System.out.println("Method#11: loadSerial()");
+        LOGGER.debug("Loading SGP30 serial number");
         //byte[] commandID = new byte[]{0x36, (byte) 0x82};
         int command = 0x3682;
         int typDelay = 10; // Typ.10ms
@@ -351,14 +364,6 @@ public class SGP30 {
         byte replySz = 9;  // 9 bytes
         return sensorCommandSendOrReceive(command, maxDelay, replySz);
     }
-    /**
-     * @param command   command to execute over I2C
-     * @param maxDelay  delay to wait for read of I2C
-     * @param replySize size of the expected reply
-     * @return the read result
-     * @throws IOException          could not read from abc.SGP30
-     * @throws InterruptedException interrupted during delay
-     */
     /**
      * Sends a single SGP30 command and optionally waits for a reply.
      *
@@ -371,8 +376,23 @@ public class SGP30 {
      *
      * <p>This helper wraps that event-driven flow in a blocking method so the
      * example can expose a simple sensor API.</p>
+     *
+     * <p>Control flow summary:
+     * <ol>
+     *   <li>A sensor method calls this helper.</li>
+     *   <li>This helper sends the command and requests a reply.</li>
+     *   <li>Firmata later delivers the raw bytes to {@code onReceive(...)}.</li>
+     *   <li>The listener calls {@code processData(...)} to decode the payload.</li>
+     *   <li>{@code processData(...)} stores the parsed values in
+     *   {@code receivedSensorData} and sets {@code newDataAvailable=true}.</li>
+     *   <li>This helper sees the flag change and returns the parsed values back
+     *   to the original caller.</li>
+     * </ol>
+     *
+     * <p>That lets the public sensor API look synchronous even though the
+     * Firmata transport is callback-driven underneath.</p>
      */
-    private int[] sensorCommandSendOrReceive(int command, int maxDelay, byte replySize, byte... bytesToSend) throws IOException, InterruptedException {
+    private int[] sensorCommandSendOrReceive(int command, int sensorDelayMs, byte replySize, byte... bytesToSend) throws IOException, InterruptedException {
         // A. Clear new data flag
         newDataAvailable = false;
         receivedSensorData = null;
@@ -382,43 +402,44 @@ public class SGP30 {
                 (byte) (command & 0xFF)
             };
 
-            System.out.println("I2C 'tell' Command");
+            LOGGER.debug("Sending SGP30 command 0x{} over I2C", toHex(command));
+            LOGGER.trace("I2C write bytes: {}", Arrays.toString(commandBytes));
             sgp30Device.tell(commandBytes);
             if (bytesToSend.length > 0) {
+                LOGGER.trace("I2C payload bytes: {}", Arrays.toString(bytesToSend));
                 sgp30Device.tell(bytesToSend);
             }
             if (replySize > 0) {    //Required because iaqInit has no reply
-                Thread.sleep(maxDelay);
-                System.out.println("I2C 'ask' Command");
+                Thread.sleep(sensorDelayMs);
+                LOGGER.debug("Requesting {} reply bytes for command 0x{} after {} ms sensor delay", replySize, toHex(command), sensorDelayMs);
                 sgp30Device.ask(replySize,sgp30Listener);
         // C. Wait for data back, maybe check the new data flag every millisecond
                 int i = 0;
-                while (!newDataAvailable && i < maxDelay) {
+                while (!newDataAvailable && i < I2C_RESPONSE_TIMEOUT_MS) {
                     Thread.sleep(1);
                     i++;
                 }
                 if (!newDataAvailable || receivedSensorData == null) {
+                    LOGGER.error("Sensor command 0x{} timed out after {} ms waiting for I2C data (sensor delay {} ms)",
+                            toHex(command), I2C_RESPONSE_TIMEOUT_MS, sensorDelayMs);
                     throw new IOException(
-                            String.format("Sensor command 0x%04X timed out after %d ms waiting for I2C data", command, maxDelay),
+                            String.format(
+                                    "Sensor command 0x%04X timed out after %d ms waiting for I2C data (sensor delay %d ms)",
+                                    command,
+                                    I2C_RESPONSE_TIMEOUT_MS,
+                                    sensorDelayMs
+                            ),
                             new TimeoutException("No I2C response received")
                     );
                 }
+                LOGGER.trace("Received parsed data for command 0x{}: {}", toHex(command), Arrays.toString(receivedSensorData));
             } else {
-                System.out.println("No reply expected for this Command");
+                LOGGER.trace("No reply expected for command 0x{}", toHex(command));
             }
 
             //Thread.sleep(10); //Stuff was out of order on the console so this hopefully slows it down
         // D. get the data and process it.
             return receivedSensorData;
-    }
-
-
-
-    public void setNewDataAvailable(boolean newDataAvailable) {
-        this.newDataAvailable = newDataAvailable;
-    }
-    public void setReceivedData(byte[] data) {
-        this.i2cReceivedData = data;
     }
 
     /**
@@ -430,8 +451,8 @@ public class SGP30 {
      * result back to the waiting request method.</p>
      */
     void processData(byte[] crcResponse) {
-        System.out.println("Process the Received Data");
-        System.out.println("-Response bytes with CRC byte: " + Arrays.toString(crcResponse));
+        LOGGER.debug("Processing SGP30 response payload");
+        LOGGER.trace("Response bytes with CRC: {}", Arrays.toString(crcResponse));
             int replyLength = crcResponse.length;
             int[] intResponse = new int[replyLength];
             //In Java, bytes are signed convert to int to avoid confusion
@@ -445,22 +466,23 @@ public class SGP30 {
                 int crc = intResponse[i + 2];
                 int crcCheck = generateCrc(word);
                 if (crcCheck != crc) {
-                    System.out.println("-Response CRC Error");
+                    LOGGER.warn("CRC mismatch in SGP30 response word {}: expected 0x{}, received 0x{}",
+                            i / 3, toHex(crcCheck), toHex(crc));
                    //throw new IOException("CRC error " + crc + " != " + crcCheck + " for crc check " + i);
                 }
                 else {
-                    System.out.printf("-Response CRC byte:     %d Pass!%n", i+3);
+                    LOGGER.trace("CRC check passed for SGP30 response word {}", i / 3);
                     intResult[i / 3] = (word[0] << 8 | word[1]);
                     byteResult[i / 3 * 2] = (byte) (word[0] & 0xFF);
                     byteResult[i / 3 * 2 + 1] = (byte) (word[1] & 0xFF);
                 }
             }
-        System.out.println("-Response integer data: " + Arrays.toString(intResult));
-        System.out.println("-Response byte data:    " + Arrays.toString(byteResult));
+        LOGGER.debug("Parsed SGP30 response words: {}", Arrays.toString(intResult));
+        LOGGER.trace("Parsed SGP30 response bytes: {}", Arrays.toString(byteResult));
 
         // Convert byte array to hex string
         String hexString = bytesToHex(byteResult);
-        System.out.println("Response in Hex: 0x" + hexString);
+        LOGGER.trace("Parsed SGP30 response hex: 0x{}", hexString);
         receivedSensorData = intResult;
         newDataAvailable = true; // Set the newDataAvailable flag to true
     }
@@ -479,6 +501,7 @@ public class SGP30 {
      * @return CRC8 of given data
      */
     private int generateCrc(int[] data) {
+        LOGGER.trace("Generating CRC for bytes {}", Arrays.toString(data));
         int crc = crc8Init;//0xFF;
         for (int bt : data) {
 
@@ -493,5 +516,35 @@ public class SGP30 {
             }
         }
         return crc & 0xFF;
+    }
+
+    /**
+     * Receives asynchronous Firmata I2C replies for this {@link SGP30}.
+     *
+     * <p>The event contains the raw bytes read from the sensor's I2C address.
+     * This listener forwards that payload to the sensor-specific parser so the
+     * transport layer stays generic while the {@code SGP30} class remains
+     * responsible for decoding its own protocol.</p>
+     */
+    private final class SGP30Listener implements I2CListener {
+
+        @Override
+        public void onReceive(I2CEvent theI2CEvent) {
+            byte[] receivedData = theI2CEvent.getData();
+            if (receivedData != null && receivedData.length > 0) {
+                LOGGER.debug("Received asynchronous I2C event from {}", theI2CEvent.getDevice());
+                LOGGER.trace("I2C event details: {}", theI2CEvent);
+                LOGGER.trace("I2C data bytes: {}", Arrays.toString(receivedData));
+                LOGGER.trace("I2C data hex: 0x{}", new BigInteger(1, theI2CEvent.getData()).toString(16));
+
+                processData(receivedData);
+            } else {
+                LOGGER.warn("Received empty I2C event payload from {}", theI2CEvent.getDevice());
+            }
+        }
+    }
+
+    private static String toHex(int value) {
+        return String.format("%04X", value & 0xFFFF);
     }
 } //End_of SGP30 Class

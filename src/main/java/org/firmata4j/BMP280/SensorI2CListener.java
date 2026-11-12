@@ -7,7 +7,6 @@ package org.firmata4j.BMP280;
 import org.firmata4j.I2CDevice;
 import org.firmata4j.I2CEvent;
 import org.firmata4j.I2CListener;
-import org.firmata4j.SGP30.SGP30Listener;
 
 import java.math.BigInteger;
 import java.util.Arrays;

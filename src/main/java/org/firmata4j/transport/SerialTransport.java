@@ -23,12 +23,9 @@
  */
 package org.firmata4j.transport;
 
-import jssc.SerialPort;
-import jssc.SerialPortEvent;
-import jssc.SerialPortEventListener;
-import jssc.SerialPortException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
 import java.io.IOException;
 import org.firmata4j.Parser;
 
@@ -37,72 +34,64 @@ import org.firmata4j.Parser;
  *
  * @author Ali Kia
  */
-public class SerialTransport implements TransportInterface, SerialPortEventListener {
+public class SerialTransport implements TransportInterface {
+
+    private static final int BAUD_RATE = 57600;
+    private static final int DATA_BITS = 8;
 
     private Parser parser;
 
     private final SerialPort port;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SerialTransport.class);
-
     public SerialTransport(String portName) {
-        this.port = new SerialPort(portName);
+        this.port = SerialPort.getCommPort(portName);
     }
 
     @Override
     public void start() throws IOException {
-        if (!port.isOpened()) {
-            try {
-                port.openPort();
-                port.setParams(
-                        SerialPort.BAUDRATE_57600,
-                        SerialPort.DATABITS_8,
-                        SerialPort.STOPBITS_1,
-                        SerialPort.PARITY_NONE);
-                port.setEventsMask(SerialPort.MASK_RXCHAR);
-                port.addEventListener(this);
-            } catch (SerialPortException ex) {
-                throw new IOException("Cannot start firmata device", ex);
+        if (!port.isOpen()) {
+            port.setComPortParameters(BAUD_RATE, DATA_BITS, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
+            if (port.openPort()) {
+                port.addDataListener(new SerialPortDataListener() {
+                    @Override
+                    public int getListeningEvents() {
+                        return SerialPort.LISTENING_EVENT_DATA_RECEIVED;
+                    }
+
+                    @Override
+                    public void serialEvent(SerialPortEvent event) {
+                        if (event.getEventType() == SerialPort.LISTENING_EVENT_DATA_RECEIVED) {
+                            parser.parse(event.getReceivedData());
+                        }
+                    }
+                });
+            } else {
+                throw new IOException("Cannot start firmata device: port=" + port);
             }
         }
     }
 
     @Override
     public void stop() throws IOException {
-        try {
-            if (port.isOpened()) {
-                port.purgePort(SerialPort.PURGE_RXCLEAR | SerialPort.PURGE_TXCLEAR);
-                port.closePort();
+        if (port.isOpen()) {
+            port.removeDataListener();
+            if (!port.closePort()) {
+                throw new IOException("Cannot properly stop firmata device: port=" + port);
             }
-        } catch (SerialPortException ex) {
-            throw new IOException("Cannot properly stop firmata device", ex);
         }
     }
 
     @Override
     public void write(byte[] bytes) throws IOException {
-        try {
-            port.writeBytes(bytes);
-        } catch (SerialPortException ex) {
-            throw new IOException("Cannot send message to device", ex);
+        int written = port.writeBytes(bytes, bytes.length);
+        if (written != bytes.length) {
+            throw new IOException("Cannot send message to device: port=" + port);
         }
     }
 
     @Override
     public void setParser(Parser parser) {
         this.parser = parser;
-    }
-
-    @Override
-    public void serialEvent(SerialPortEvent event) {
-        // queueing data from input buffer to processing by FSM logic
-        if (event.isRXCHAR() && event.getEventValue() > 0) {
-            try {
-                parser.parse(port.readBytes());
-            } catch (SerialPortException ex) {
-                LOGGER.error("Cannot read from device", ex);
-            }
-        }
     }
 
 }

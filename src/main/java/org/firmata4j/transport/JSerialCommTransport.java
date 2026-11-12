@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2014-2019 Oleg Kurbatov (o.v.kurbatov@gmail.com)
@@ -23,81 +23,14 @@
  */
 package org.firmata4j.transport;
 
-import java.io.IOException;
-
-import org.firmata4j.Parser;
-
-import com.fazecast.jSerialComm.SerialPort;
-import com.fazecast.jSerialComm.SerialPortDataListener;
-import com.fazecast.jSerialComm.SerialPortEvent;
-
 /**
- * Implementation of {@link TransportInterface} based on {@link SerialPort}.
- * 
- * @author Norbert Sándor
+ * Backwards-compatible alias for the default {@link SerialTransport}.
+ *
+ * @author Norbert SÃ¡ndor
  */
-public class JSerialCommTransport implements TransportInterface
-{
-    private final SerialPort serialPort;
+public class JSerialCommTransport extends SerialTransport {
 
-    private Parser parser;
-
-    public JSerialCommTransport(String portDescriptor)
-    {
-        serialPort = SerialPort.getCommPort(portDescriptor);
-    }
-
-    @Override
-    public void start() throws IOException
-    {
-        if (!serialPort.isOpen())
-        {
-            if (serialPort.openPort())
-            {
-                serialPort.setComPortParameters(jssc.SerialPort.BAUDRATE_57600, jssc.SerialPort.DATABITS_8,
-                        SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
-                serialPort.addDataListener(new SerialPortDataListener()
-                {
-                    @Override
-                    public void serialEvent(SerialPortEvent event)
-                    {
-                        if (event.getEventType() == SerialPort.LISTENING_EVENT_DATA_RECEIVED)
-                        {
-                            parser.parse(event.getReceivedData());
-                        }
-                    }
-
-                    @Override
-                    public int getListeningEvents()
-                    {
-                        return SerialPort.LISTENING_EVENT_DATA_RECEIVED;
-                    }
-                });
-            } else
-            {
-                throw new IOException("Cannot start firmata device: port=" + serialPort);
-            }
-        }
-    }
-
-    @Override
-    public void stop() throws IOException
-    {
-        if (serialPort.isOpen() && !serialPort.closePort())
-        {
-            throw new IOException("Cannot properly stop firmata device: port=" + serialPort);
-        }
-    }
-
-    @Override
-    public void write(byte[] bytes) throws IOException
-    {
-        serialPort.writeBytes(bytes, bytes.length);
-    }
-
-    @Override
-    public void setParser(Parser parser)
-    {
-        this.parser = parser;
+    public JSerialCommTransport(String portDescriptor) {
+        super(portDescriptor);
     }
 }
