@@ -18,6 +18,22 @@ allows changing their mode and state
 
 ## Installation
 
+### Building This Fork
+
+This development version requires JDK 21 or newer and Maven 3.6.3 or newer.
+Published historical versions shown below retain their original requirements.
+
+Set `JAVA_HOME` to your JDK installation and run:
+
+```sh
+mvn clean verify
+```
+
+In IntelliJ IDEA, reload the Maven project, set the Project SDK and language
+level to Java 21, and select JDK 21 for the Maven runner and importer.
+The experimental `org.firmata4j.I2CSensor` package is temporarily excluded from
+compilation while its replacement is designed.
+
 ### Maven
 Add the following dependency to `pom.xml` of your project:
 

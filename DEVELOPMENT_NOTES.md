@@ -8,15 +8,28 @@
 - SGP30 communication was previously confirmed on hardware. The checkpoint has not been retested on hardware.
 - The existing experimental `I2CSensor` package is included in the baseline; review it before deciding what to reuse.
 - The development build now excludes `org/firmata4j/I2CSensor/**` through the Maven compiler configuration. Remove this temporary exclusion when the replacement framework is ready.
-- The checkpoint Maven configuration targets Java 7 and fails on Java 8 lambdas. The development build now targets Java 8 as an interim step toward Java 21.
+- The checkpoint Maven configuration targets Java 7 and fails on Java 8 lambdas. Commit `0d71619` established the Java 8 baseline; the development build now targets Java 21.
 
 ## Planned Work
 
 ### Java 21
 
-- [ ] Update the whole project to Java 21.
-- [ ] Align Maven compiler settings, build plugins, CI, IDE configuration, and documentation with Java 21.
-- [ ] Verify the project builds and tests successfully with JDK 21.
+- [x] Set the project compiler release to Java 21.
+- [x] Update the compiler and test plugins, CI Java configuration, and build documentation for Java 21.
+- [ ] Select JDK 21 for the local IntelliJ project SDK, Maven runner, and importer, then reload Maven. IDE settings are not tracked in Git.
+- [x] Verify the project builds and tests successfully with JDK 21.
+
+Validation on 2026-11-16: `mvn clean verify` passed using portable Corretto
+21.0.13, with all six tests passing in the normal forked JVM. No
+`-DforkCount=0` workaround is required with Surefire 3.5.4. The JDK was
+downloaded into the system temporary directory for validation; install or
+select a persistent JDK 21 for everyday development. GitHub workflows were
+updated but have not been run remotely. Hardware examples have not been
+retested on Java 21.
+
+Remaining build follow-ups: review the legacy release-profile plugins during
+the dependency update, and replace the deprecated `Double(double)` constructor
+in `ParsingI2CMessageState` during parser cleanup.
 
 ### Logging
 
