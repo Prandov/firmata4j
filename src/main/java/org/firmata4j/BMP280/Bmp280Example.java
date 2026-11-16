@@ -12,7 +12,7 @@ import java.io.IOException;
 public class Bmp280Example {
 
     //static String USBPORT = "/dev/cu.usbserial-0001"; // TO-DO : modify based on your computer setup.
-    static String USBPORT = "COM4";
+    static String USBPORT = "COM5";
 
     public static void main(String[] args) throws IOException, InterruptedException {
         //var myUSBPort = USBPORT; //James uses Var
