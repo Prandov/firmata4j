@@ -39,13 +39,53 @@ public interface I2CDevice {
     byte getAddress();
 
     /**
-     * Sets delay between writing and reading data to/from I2C device.
-     * 
-     * @param delay delay between the moment the device is written to and the
-     * moment when the data can be read from it
+     * Sets the firmware delay between selecting a register and reading from it.
+     *
+     * <p>The value is in microseconds, from 0 to 16383. For example,
+     * {@code sensor.setDelay(128)} requests a 128-microsecond delay inside a
+     * registered {@code ask(...)} operation. This is not a Java response timeout
+     * and does not insert a delay between separate {@code tell(...)} and
+     * {@code ask(...)} calls.</p>
+     *
+     * <p>In the Firmata implementation, this configuration is board-wide and
+     * the largest delay requested by any device is retained. Requesting a
+     * smaller value does not reduce the current delay.</p>
+     *
+     * @param delay firmware register-to-read delay in microseconds (0..16383)
+     * @throws IllegalArgumentException if the Firmata delay is out of range
      * @throws IOException when delay cannot be set due to communication fail
      */
     void setDelay(int delay) throws IOException;
+
+    /**
+     * Enables a repeated start between register selection and reading, instead
+     * of a STOP. Requires protocol 2.5.1 firmware and a registered read. The
+     * default is false; it does not change separate {@link #tell(byte...)} writes.
+     * Changes apply to subsequent requests, not already running continuous reads.
+     *
+     * <p>Enable this when a sensor datasheet requires register selection and
+     * reading without a STOP between them. For example:</p>
+     * <pre>{@code
+     * sensor.setReadRestart(true);
+     * sensor.ask(0xD0, (byte) 1, event -> {
+     *     int chipId = event.getData()[0] & 0xFF;
+     * });
+     * }</pre>
+     * <p>Leave disabled when the sensor requires a STOP or when using a
+     * command/response protocol such as SGP30's separate command write and
+     * delayed register-less read. Call {@code setReadRestart(false)} to restore
+     * STOP for future requests. Protocol version reports omit the patch version,
+     * so callers must know their firmware supports the 2.5.1 flag.</p>
+     *
+     * @param enabled whether registered reads should use repeated start
+     * @throws UnsupportedOperationException if enabling this on an implementation
+     * that does not support repeated start
+     */
+    default void setReadRestart(boolean enabled) {
+        if (enabled) {
+            throw new UnsupportedOperationException("Repeated-start reads are not supported by this transport.");
+        }
+    }
 
     /**
      * Sends data to the I2C device.

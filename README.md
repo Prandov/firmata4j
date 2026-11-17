@@ -16,6 +16,10 @@ for newer platforms such as Apple Silicon and Windows on ARM.
 allows changing their mode and state
 - Allows communicating with I2C devices
 
+This fork targets core Firmata protocol 2.5 and supports optional I2C
+repeated-start reads from protocol 2.5.1. See the
+[compatibility audit](docs/PROTOCOL_2_5.md) for changes, usage, and limitations.
+
 ## Installation
 
 ### Building This Fork

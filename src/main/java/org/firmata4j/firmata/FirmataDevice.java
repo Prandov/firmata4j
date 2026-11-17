@@ -73,6 +73,13 @@ public class FirmataDevice implements IODevice {
     private final Map<Byte, FirmataI2CDevice> i2cDevices = new HashMap<>();
     private volatile Map<String, Object> firmwareInfo;
     private volatile Map<Integer, Integer> analogMapping;
+    private volatile int protocolMajor = -1;
+    private volatile int protocolMinor = -1;
+
+    boolean supportsSinglePinWrite() {
+        // Protocol 2.5 added 0xF5; keep port writes for older or unreported versions.
+        return protocolMajor == 2 && protocolMinor >= 5;
+    }
 
     private static final ThreadFactory THREAD_FACTORY = new DaemonThreadFactory("firmata-event-handler");
     private static final long TIMEOUT = 15000L;
@@ -175,6 +182,8 @@ public class FirmataDevice implements IODevice {
             try {
                 parser.start();
                 transport.start();
+                // Query protocol separately from firmware so 2.5-only commands can be gated.
+                sendMessage(FirmataMessageFactory.REQUEST_PROTOCOL_VERSION);
                 sendMessage(FirmataMessageFactory.REQUEST_FIRMWARE);
             } catch (IOException ex) {
                 transport.stop();
@@ -346,6 +355,9 @@ public class FirmataDevice implements IODevice {
     private final Consumer<Event> onProtocolReceive = new Consumer<Event>() {
         @Override
         public void accept(Event event) {
+            // Remember the wire version; firmware version is not a protocol capability check.
+            protocolMajor = (Integer) event.getBodyItem(PROTOCOL_MAJOR);
+            protocolMinor = (Integer) event.getBodyItem(PROTOCOL_MINOR);
             if (!event.getBodyItem(PROTOCOL_MAJOR).equals((int) FIRMATA_MAJOR_VERSION)) {
                 LOGGER.error("Current version of firmata protocol on device ({}.{}) is not compatible with version of firmata4j ({}.{}).",
                         event.getBodyItem(PROTOCOL_MAJOR),

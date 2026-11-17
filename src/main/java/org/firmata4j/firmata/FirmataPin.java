@@ -132,12 +132,26 @@ public class FirmataPin implements Pin {
         byte[] message;
         long newValue;
         if (currentMode == Mode.OUTPUT) {
+            // Firmata 2.5 writes one pin directly, without rebuilding its neighbours' values.
+            if (device.supportsSinglePinWrite()) {
+                newValue = value > 0 ? 1 : 0;
+                if (currentValue != newValue) {
+                    device.sendMessage(FirmataMessageFactory.setDigitalPinValue(pinId, newValue != 0));
+                    updateValue(newValue);
+                }
+                return;
+            }
             //have to calculate the value of whole port (8-pin set) the pin sits in
             byte portId = (byte) (pinId / 8);
             byte pinInPort = (byte) (pinId % 8);
             byte portValue = 0;
             for (int i = 0; i < 8; i++) {
-                Pin p = device.getPin(portId * 8 + i);
+                int index = portId * 8 + i;
+                // Preserve the pre-2.5 fallback even when the last port has fewer than eight pins.
+                if (index >= device.getPinsCount()) {
+                    break;
+                }
+                Pin p = device.getPin(index);
                 if (p.getMode() == Mode.OUTPUT && p.getValue() > 0) {
                     portValue |= 1 << i;
                 }
@@ -159,7 +173,7 @@ public class FirmataPin implements Pin {
         }
         if (currentValue != newValue) {
             device.sendMessage(message);
-            updateValue(value);
+            updateValue(newValue);
         }
     }
 

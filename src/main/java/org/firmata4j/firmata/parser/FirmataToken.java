@@ -39,8 +39,9 @@ public interface FirmataToken {
      * software can test whether it will be compatible with the currently
      * installed firmware.
      */
+    // Target StandardFirmata's protocol 2.5.1; REPORT_VERSION carries only 2.5.
     byte FIRMATA_MAJOR_VERSION  = 2; // for non-compatible changes
-    byte FIRMATA_MINOR_VERSION  = 3; // for backwards compatible changes
+    byte FIRMATA_MINOR_VERSION  = 5; // for backwards compatible changes
     byte FIRMATA_BUGFIX_VERSION = 1; // for bugfix releases
     
     // message command bytes (128-255/0x80-0xFF)
@@ -141,6 +142,7 @@ public interface FirmataToken {
     byte I2C_READ                 = 0X08;
     byte I2C_READ_CONTINUOUS      = 0X10;
     byte I2C_STOP_READ_CONTINUOUS = 0X18;
+    byte I2C_RESTART_TX           = 0x40; // protocol 2.5.1: repeated start after register selection
 
     int MIN_SAMPLING_INTERVAL    = 10;
     int MAX_SAMPLING_INTERVAL    = 100;

@@ -86,7 +86,9 @@ public interface Pin {
          */
         SERIAL,
         /**
-         * Enable internal pull-up resistor for pin
+         * Digital input with an internal pull-up resistor (wire mode 0x0B).
+         * Select with {@code pin.setMode(Pin.Mode.PULLUP)} when supported by
+         * the pin; the external circuit determines when it reads LOW or HIGH.
          */
         PULLUP,
         
@@ -97,7 +99,8 @@ public interface Pin {
          */
         UNSUPPORTED,
         /**
-         * Pin configured to be ignored by digitalWrite and capabilityResponse
+         * Pin excluded from digital port writes and capability reporting.
+         * Its wire value is 0x7F, independent of this enum's ordinal.
          */
         IGNORED;
 
@@ -111,7 +114,8 @@ public interface Pin {
             if (modeToken == FirmataToken.PIN_MODE_IGNORE) {
                 return IGNORED;
             }
-            if (modeToken > FirmataToken.TOTAL_PIN_MODES) {
+            // The 2.5 audit confirmed 0x00..0x0B and IGNORE; reserved modes must not index the enum.
+            if (modeToken < 0 || modeToken > FirmataToken.PIN_MODE_PULLUP) {
                 return UNSUPPORTED;
             }
             return values()[modeToken];

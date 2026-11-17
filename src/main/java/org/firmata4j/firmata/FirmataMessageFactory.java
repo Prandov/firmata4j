@@ -40,6 +40,8 @@ public class FirmataMessageFactory {
      * This message requests firmware version of a Firmata device.
      */
     public static final byte[] REQUEST_FIRMWARE = {START_SYSEX, REPORT_FIRMWARE, END_SYSEX};
+    /** Requests protocol major/minor (the patch version is not transmitted). */
+    public static final byte[] REQUEST_PROTOCOL_VERSION = {REPORT_VERSION};
     /**
      * This message requests capability repot of a Firmata device.
      */
@@ -63,14 +65,13 @@ public class FirmataMessageFactory {
         if (delayInMicroseconds < 0) {
             throw new IllegalArgumentException("Delay cannot be less than 0 microseconds.");
         }
-        if (delayInMicroseconds > 255) {
-            throw new IllegalArgumentException("Delay cannot be greater than 255 microseconds.");
+        // Protocol audit: I2C_CONFIG uses two 7-bit bytes, not an 8-bit delay.
+        if (delayInMicroseconds > 0x3FFF) {
+            throw new IllegalArgumentException("Delay cannot be greater than 16383 microseconds.");
         }
         byte delayLsb = (byte) (delayInMicroseconds & 0x7F);
-        byte delayMsb = 0;
-        if (delayInMicroseconds > 128) {
-            delayMsb = 1;
-        }
+        // Example: 128 us is [0, 1]; each wire byte can carry only seven bits.
+        byte delayMsb = (byte) ((delayInMicroseconds >>> 7) & 0x7F);
         return new byte[]{START_SYSEX, I2C_CONFIG, delayLsb, delayMsb, END_SYSEX};
     }
 
@@ -110,12 +111,27 @@ public class FirmataMessageFactory {
      * @return the message
      */
     public static byte[] i2cReadRequest(byte slaveAddress, int register, int bytesToRead, boolean continuous) {
+        return i2cReadRequest(slaveAddress, register, bytesToRead, continuous, false);
+    }
+
+    /**
+     * Builds a read, optionally using the protocol 2.5.1 repeated-start flag.
+     * The flag holds the transaction between register selection and reading;
+     * it does not join a previous independent write request to this read.
+     * Without a register, firmware has no register-selection step to modify.
+     */
+    public static byte[] i2cReadRequest(byte slaveAddress, int register, int bytesToRead,
+            boolean continuous, boolean restart) {
         byte command;
         byte[] message;
         if (continuous) {
             command = I2C_READ_CONTINUOUS;
         } else {
             command = I2C_READ;
+        }
+        // Protocol 2.5.1 assigns bit 6 to repeated start; leave existing read modes intact.
+        if (restart) {
+            command |= I2C_RESTART_TX;
         }
         //TODO replace hardcoded slave address (MSB) with generated one to support 10-bit mode
         // see https://github.com/firmata/protocol/blob/master/i2c.md
@@ -208,7 +224,9 @@ public class FirmataMessageFactory {
         if (mode == Pin.Mode.UNSUPPORTED) {
             throw new IllegalArgumentException("Cannot set unsupported mode to pin " + pinId);
         }
-        return new byte[]{SET_PIN_MODE, pinId, (byte) mode.ordinal()};
+        // IGNORE is wire value 0x7F, not the Java enum ordinal; PULLUP remains 0x0B.
+        return new byte[]{SET_PIN_MODE, pinId,
+            mode == Pin.Mode.IGNORED ? PIN_MODE_IGNORE : (byte) mode.ordinal()};
     }
 
     /**
@@ -223,7 +241,16 @@ public class FirmataMessageFactory {
      * @return Firmata message to set digital output
      */
     public static byte[] setDigitalPinValue(byte portId, byte value) {
-        return new byte[]{(byte) (DIGITAL_MESSAGE | (portId & 0x0F)), (byte) (value & 0x7F), (byte) ((value >>> 7) & 0x7F)};
+        // Keep the legacy port mask unsigned so pin 7 is encoded as MSB 1, not 127.
+        return new byte[]{(byte) (DIGITAL_MESSAGE | (portId & 0x0F)), (byte) (value & 0x7F), (byte) ((value & 0xFF) >>> 7)};
+    }
+
+    /** Sets one output without changing neighbouring pins (Firmata 2.5+). */
+    public static byte[] setDigitalPinValue(byte pinId, boolean high) {
+        if (pinId < 0) {
+            throw new IllegalArgumentException("Pin must be between 0 and 127.");
+        }
+        return new byte[]{SET_DIGITAL_PIN_VALUE, pinId, (byte) (high ? 1 : 0)};
     }
 
     /**

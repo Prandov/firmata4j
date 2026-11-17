@@ -51,6 +51,7 @@ public class FirmataI2CDevice implements I2CDevice {
     private final byte address;
 
     private final AtomicBoolean receivingUpdates = new AtomicBoolean(false);
+    private volatile boolean readRestart;
 
     private final Map<Integer, I2CListener> callbacks = new ConcurrentHashMap<>();
 
@@ -72,6 +73,12 @@ public class FirmataI2CDevice implements I2CDevice {
     }
 
     @Override
+    public void setReadRestart(boolean enabled) {
+        // Opt in to the 2.5.1 read flag; separate tell() writes retain their STOP behavior.
+        readRestart = enabled;
+    }
+
+    @Override
     public void tell(byte... data) throws IOException {
         LOGGER.atTrace().addArgument(this).addArgument(() -> java.util.HexFormat.of().formatHex(data))
                 .log("I2C write to {}: {}");
@@ -87,7 +94,8 @@ public class FirmataI2CDevice implements I2CDevice {
     public void ask(int register, byte responseLength, I2CListener listener) throws IOException {
         LOGGER.debug("I2C read from {}: register={}, length={}", this, register, responseLength & 0xFF);
         callbacks.put(register, listener);
-        masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, register, responseLength, false));
+        // Carry the 2.5.1 restart setting through both one-shot and continuous requests.
+        masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, register, responseLength & 0xFF, false, readRestart));
     }
 
     @Override
@@ -104,7 +112,7 @@ public class FirmataI2CDevice implements I2CDevice {
     public boolean startReceivingUpdates(int register, byte messageLength) throws IOException {
         boolean result = receivingUpdates.compareAndSet(false, true);
         if (result) {
-            masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, register, messageLength, true));
+            masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, register, messageLength & 0xFF, true, readRestart));
         }
         return result;
     }
@@ -113,7 +121,7 @@ public class FirmataI2CDevice implements I2CDevice {
     public boolean startReceivingUpdates(byte messageLength) throws IOException {
         boolean result = receivingUpdates.compareAndSet(false, true);
         if (result) {
-            masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, REGISTER_NOT_SET, messageLength, true));
+            masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, REGISTER_NOT_SET, messageLength & 0xFF, true, readRestart));
         }
         return result;
     }

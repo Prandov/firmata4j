@@ -58,32 +58,41 @@ public class ParsingI2CMessageState extends AbstractState {
     @Override
     public void process(byte b) {
         if (b == END_SYSEX) {
-            byte[] buffer = convertI2CBuffer(getBuffer());
-            byte address = buffer[0];
-//            byte register = buffer[1];
-            int register = buffer[1]; //was throwing an error Not sure if this will copy buffer[1,2] into an int
-            byte[] message = new byte[buffer.length - 2];
-            System.arraycopy(buffer, 2, message, 0, buffer.length - 2);
+            byte[] buffer = getBuffer();
+            transitTo(WaitingForMessageState.class);
+            if (buffer.length < 4 || buffer.length % 2 != 0) {
+                Event error = new Event(ERROR_MESSAGE);
+                error.setBodyItem(ERROR_DESCRIPTION, "Malformed I2C reply: expected address/register pairs and paired data bytes.");
+                publish(error);
+                return;
+            }
+            int address = decodePair(buffer, 0);
+            if (address > 0x7F) {
+                Event error = new Event(ERROR_MESSAGE);
+                error.setBodyItem(ERROR_DESCRIPTION, "10-bit I2C addresses are not supported.");
+                publish(error);
+                return;
+            }
+            // 2.5 protocol audit: preserve unsigned register bits instead of narrowing to a signed byte.
+            // Address/register are 14-bit fields; payload pairs represent 8-bit bytes.
+            // For example, 0xD0 must stay 208 to match ask(0xD0, ...), not become -48.
+            int register = decodePair(buffer, 2);
+            byte[] message = new byte[(buffer.length - 4) / 2];
+            for (int i = 0; i < message.length; i++) {
+                message[i] = (byte) decodePair(buffer, 4 + i * 2);
+            }
             Event event = new Event(I2C_MESSAGE);
-            event.setBodyItem(I2C_ADDRESS, address);
+            event.setBodyItem(I2C_ADDRESS, (byte) address);
             event.setBodyItem(I2C_REGISTER, register);
             event.setBodyItem(I2C_MESSAGE, message);
-            transitTo(WaitingForMessageState.class);
             publish(event);
         } else {
             bufferize(b);
         }
     }
 
-    private static byte[] convertI2CBuffer(byte[] byteBuffer) {
-        int outSize = new Double(Math.floor(byteBuffer.length / 2)).intValue();
-        byte[] outBuffer = new byte[outSize];
-        int outIndex = 0;
-        for (int index = 0; index < byteBuffer.length; index = index + 2) {
-            outBuffer[outIndex] = (byte) (((byteBuffer[index + 1] & 0x01) << 7) | (byteBuffer[index] & 0x7F));
-            outIndex++;
-        }
-        return outBuffer;
+    private static int decodePair(byte[] buffer, int offset) {
+        return (buffer[offset] & 0x7F) | ((buffer[offset + 1] & 0x7F) << 7);
     }
 
 }

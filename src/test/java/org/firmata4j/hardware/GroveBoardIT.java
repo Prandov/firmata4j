@@ -64,6 +64,16 @@ public class GroveBoardIT {
     @Test(timeout = 5000)
     public void bmp280ReturnsExpectedChipId() throws Exception {
         assertBmp280Id();
+        // Protocol 2.5.1 adds a repeated start between register selection and reading.
+        I2CDevice pressure = board.getI2CDevice((byte) 0x77);
+        pressure.setReadRestart(true);
+        try {
+            CompletableFuture<byte[]> result = new CompletableFuture<>();
+            pressure.ask(0xD0, (byte) 1, event -> result.complete(event.getData()));
+            assertArrayEquals(new byte[]{0x58}, result.get(2, TimeUnit.SECONDS));
+        } finally {
+            pressure.setReadRestart(false);
+        }
     }
 
     @Test(timeout = 45000)

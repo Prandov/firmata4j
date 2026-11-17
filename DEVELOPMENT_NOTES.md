@@ -112,6 +112,20 @@ signing unless signing credentials are configured; validation never deploys.
 
 ### Common I2C Sensor Package
 
+The protocol 2.5 audit and implementation changes are documented in
+`docs/PROTOCOL_2_5.md`, with line comments in the affected Java code. This adds
+version-gated single-pin digital writes and opt-in repeated-start reads, while
+correcting I2C delay/register encoding and reserved pin-mode handling. Optional
+Firmata extension APIs are outside this update. Existing sensor APIs and the
+experimental package exclusion are retained.
+
+Validation on 2026-11-17: 23 unit tests and all three COM5 hardware tests pass,
+including BMP280 registered repeated-start reads and 16 CRC-valid SGP30 samples.
+The board's 2.5 protocol report no longer produces a version mismatch warning.
+Tests deliberately simulating protocol 2.3 and 2.4 still produce compatibility
+warnings to exercise the older-firmware fallback. Single-pin output writes are
+verified with a fake transport rather than driving the Grove kit's outputs.
+
 - [ ] Expand I2C device support and move sensor implementations into a common package.
 - [ ] Decide package naming and structure after reviewing the existing sensor code and experimental `I2CSensor` package.
 - [ ] Evaluate a shared interface, abstract base class, factory, or helper classes where they reduce duplication.
