@@ -8,10 +8,12 @@ import org.firmata4j.I2CDevice;
 import org.firmata4j.I2CEvent;
 import org.firmata4j.I2CListener;
 
-import java.math.BigInteger;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SensorI2CListener implements I2CListener, Comparable<SensorI2CListener>{
+    private static final Logger LOGGER = LoggerFactory.getLogger(SensorI2CListener.class);
 
     private final I2CDevice theI2CDevice;
     SensorI2CListener(I2CDevice theI2CDevice){
@@ -20,23 +22,18 @@ public class SensorI2CListener implements I2CListener, Comparable<SensorI2CListe
     @Override
     public void onReceive(I2CEvent theI2CEvent) {
 
-        // Print out the event details (address, data, etc.)
-        System.out.println("Listener reports the following information: ");
-        System.out.println("The event:" + theI2CEvent + ". Note: data is in base 10.");
-        System.out.println("the Device address: " +theI2CEvent.getDevice());
-        System.out.println("Event data array: " + Arrays.toString(theI2CEvent.getData()) + " in base 10.");
-        /* convert the byte array and print it */
-        String hexString = new BigInteger(1,theI2CEvent.getData()).toString(16);
-        System.out.println("Event data array: 0x" + hexString);
-        /* again, but compact */
-        System.out.println("Event data array: 0x" + new BigInteger(1,theI2CEvent.getData()).toString(16));
-
-
+        byte[] data = theI2CEvent.getData();
+        LOGGER.debug("Received BMP280 I2C response from {}", theI2CEvent.getDevice());
+        LOGGER.atTrace().addArgument(() -> Arrays.toString(data)).log("BMP280 payload bytes: {}");
+        if (data == null || data.length != 1) {
+            LOGGER.warn("Expected one BMP280 ID byte, received {}", data == null ? 0 : data.length);
+        } else {
+            LOGGER.info("BMP280 chip ID: 0x{}", Integer.toHexString(data[0] & 0xFF));
+        }
     }
 
     @Override
     public int compareTo( SensorI2CListener o) {
-        System.out.println("compareTo+++++++++++++++++++++++++++++++++++++++");
         return 0;
     }
 }

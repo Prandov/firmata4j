@@ -6,8 +6,11 @@ import org.firmata4j.firmata.FirmataDevice;
 
 import java.io.IOException;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SGP30Example {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SGP30Example.class);
     /**
      * Demonstrates how Firmata4j receives I2C data from a sensor.
      *
@@ -23,19 +26,19 @@ public class SGP30Example {
 
         arduinoBoard.start();
         arduinoBoard.ensureInitializationIsDone();
-        System.out.println("Connection to device running firmata on: " + myUSBPort);
+        LOGGER.info("Connected to Firmata on {}", myUSBPort);
 
         byte sgp30I2Caddr = 0x58;
         final SGP30 sgp30 = new SGP30(arduinoBoard, sgp30I2Caddr);
 
-        System.out.println("CO2 Sensor Object Created");
+        LOGGER.info("SGP30 initialized");
         int[] serialNumber = sgp30.getSerial();
-        System.out.println("My Serial # " + Arrays.toString(serialNumber));
+        LOGGER.info("SGP30 serial words: {}", Arrays.toString(serialNumber));
 
         while (true){
             Thread.sleep(2000);
             int[] airQuality = sgp30.getAirQuality();
-            System.out.printf("eCO2 = %d ppm TVOC = %d \n", airQuality[0], airQuality[1]);
+            LOGGER.info("eCO2 = {} ppm, TVOC = {} ppb", airQuality[0], airQuality[1]);
         }
     }
 }

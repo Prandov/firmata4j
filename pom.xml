@@ -35,7 +35,8 @@
         <project.resource.directory>src/main/resources</project.resource.directory>
         <test.resource.directory>src/test/resources</test.resource.directory>
         <jserialcomm.version>2.11.4</jserialcomm.version>
-        <slf4j.version>1.7.36</slf4j.version>
+        <slf4j.version>2.0.20</slf4j.version>
+        <exec.mainClass>org.firmata4j.Example</exec.mainClass>
     </properties>
 
     <dependencies>
@@ -54,7 +55,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.13.1</version>
+            <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -83,8 +84,33 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>3.2.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.2.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
+                <version>3.16.0</version>
                 <configuration>
                     <compilerArgument>-Xlint:unchecked</compilerArgument>
                     <!-- Keep the experimental sensor framework out of the build until its overhaul. -->
@@ -96,12 +122,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.4</version>
+                <version>3.6.1</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>2.5.3</version>
+                <version>3.3.1</version>
                 <configuration>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
                     <useReleaseProfile>false</useReleaseProfile>
@@ -112,15 +138,59 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>3.0.0</version>
+                <version>3.7.0</version>
                 <configuration>
-                    <mainClass>org.firmata4j.Example</mainClass>
+                    <mainClass>${exec.mainClass}</mainClass>
                 </configuration>
             </plugin>
         </plugins>
     </build>
     
     <profiles>
+        <!-- Only local examples opt into a backend; library users choose their own. -->
+        <profile>
+            <id>example-logging</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                    <version>${slf4j.version}</version>
+                    <scope>runtime</scope>
+                    <optional>true</optional>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>hardware-tests</id>
+            <properties>
+                <firmata.port>COM5</firmata.port>
+                <firmata.sgp30>false</firmata.sgp30>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.6.1</version>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <firmata.hardware>true</firmata.hardware>
+                                <firmata.port>${firmata.port}</firmata.port>
+                                <firmata.sgp30>${firmata.sgp30}</firmata.sgp30>
+                            </systemPropertyVariables>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>release</id>
             <build>
@@ -128,7 +198,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
-                        <version>3.0.1</version>
+                        <version>3.4.0</version>
                         <executions>
                             <execution>
                                 <id>attach-sources</id>
@@ -141,7 +211,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>2.10.4</version>
+                        <version>3.12.0</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
@@ -149,7 +219,8 @@
                                     <goal>jar</goal>
                                 </goals>
                                 <configuration>
-                                    <additionalparam>-Xdoclint:none</additionalparam>
+                                    <doclint>none</doclint>
+                                    <excludePackageNames>org.firmata4j.I2CSensor:org.firmata4j.I2CSensor.*</excludePackageNames>
                                 </configuration>
                             </execution>
                         </executions>
@@ -157,7 +228,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
+                        <version>3.2.8</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>

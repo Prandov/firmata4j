@@ -128,7 +128,7 @@ public class SGP30 {
     public int[] getAirQuality() throws IOException, InterruptedException {
         int[] measurement = iaqMeasure();
         lastIaqMeasurement = measurement;
-        LOGGER.info("SGP30 air quality reading: eCO2={} ppm, TVOC={}", measurement[0], measurement[1]);
+        LOGGER.debug("SGP30 air quality reading: eCO2={} ppm, TVOC={} ppb", measurement[0], measurement[1]);
         return Arrays.copyOf(measurement, measurement.length);
     }
 
@@ -403,10 +403,10 @@ public class SGP30 {
             };
 
             LOGGER.debug("Sending SGP30 command 0x{} over I2C", toHex(command));
-            LOGGER.trace("I2C write bytes: {}", Arrays.toString(commandBytes));
+            LOGGER.atTrace().addArgument(() -> Arrays.toString(commandBytes)).log("I2C write bytes: {}");
             sgp30Device.tell(commandBytes);
             if (bytesToSend.length > 0) {
-                LOGGER.trace("I2C payload bytes: {}", Arrays.toString(bytesToSend));
+                LOGGER.atTrace().addArgument(() -> Arrays.toString(bytesToSend)).log("I2C payload bytes: {}");
                 sgp30Device.tell(bytesToSend);
             }
             if (replySize > 0) {    //Required because iaqInit has no reply
@@ -452,7 +452,7 @@ public class SGP30 {
      */
     void processData(byte[] crcResponse) {
         LOGGER.debug("Processing SGP30 response payload");
-        LOGGER.trace("Response bytes with CRC: {}", Arrays.toString(crcResponse));
+        LOGGER.atTrace().addArgument(() -> Arrays.toString(crcResponse)).log("Response bytes with CRC: {}");
             int replyLength = crcResponse.length;
             int[] intResponse = new int[replyLength];
             //In Java, bytes are signed convert to int to avoid confusion
@@ -480,9 +480,7 @@ public class SGP30 {
         LOGGER.debug("Parsed SGP30 response words: {}", Arrays.toString(intResult));
         LOGGER.trace("Parsed SGP30 response bytes: {}", Arrays.toString(byteResult));
 
-        // Convert byte array to hex string
-        String hexString = bytesToHex(byteResult);
-        LOGGER.trace("Parsed SGP30 response hex: 0x{}", hexString);
+        LOGGER.atTrace().addArgument(() -> bytesToHex(byteResult)).log("Parsed SGP30 response hex: 0x{}");
         receivedSensorData = intResult;
         newDataAvailable = true; // Set the newDataAvailable flag to true
     }
@@ -535,7 +533,8 @@ public class SGP30 {
                 LOGGER.debug("Received asynchronous I2C event from {}", theI2CEvent.getDevice());
                 LOGGER.trace("I2C event details: {}", theI2CEvent);
                 LOGGER.trace("I2C data bytes: {}", Arrays.toString(receivedData));
-                LOGGER.trace("I2C data hex: 0x{}", new BigInteger(1, theI2CEvent.getData()).toString(16));
+                LOGGER.atTrace().addArgument(() -> new BigInteger(1, receivedData).toString(16))
+                        .log("I2C data hex: 0x{}");
 
                 processData(receivedData);
             } else {

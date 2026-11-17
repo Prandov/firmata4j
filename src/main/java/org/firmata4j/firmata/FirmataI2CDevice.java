@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.firmata4j.I2CDevice;
 import org.firmata4j.I2CEvent;
 import org.firmata4j.I2CListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Represents an I2C device and encapsulates communication logic using Firmata
@@ -40,6 +42,7 @@ import org.firmata4j.I2CListener;
  * @author Oleg Kurbatov &lt;o.v.kurbatov@gmail.com&gt;
  */
 public class FirmataI2CDevice implements I2CDevice {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FirmataI2CDevice.class);
 
     public static final int REGISTER_NOT_SET = -1;
 
@@ -70,6 +73,8 @@ public class FirmataI2CDevice implements I2CDevice {
 
     @Override
     public void tell(byte... data) throws IOException {
+        LOGGER.atTrace().addArgument(this).addArgument(() -> java.util.HexFormat.of().formatHex(data))
+                .log("I2C write to {}: {}");
         masterDevice.sendMessage(FirmataMessageFactory.i2cWriteRequest(address, data));
     }
 
@@ -80,6 +85,7 @@ public class FirmataI2CDevice implements I2CDevice {
 
     @Override
     public void ask(int register, byte responseLength, I2CListener listener) throws IOException {
+        LOGGER.debug("I2C read from {}: register={}, length={}", this, register, responseLength & 0xFF);
         callbacks.put(register, listener);
         masterDevice.sendMessage(FirmataMessageFactory.i2cReadRequest(address, register, responseLength, false));
     }
@@ -127,6 +133,9 @@ public class FirmataI2CDevice implements I2CDevice {
      * @param message actual data from I2C device
      */
     void onReceive(int register, byte[] message) {
+        LOGGER.atTrace().addArgument(this).addArgument(register)
+                .addArgument(() -> java.util.HexFormat.of().formatHex(message))
+                .log("I2C reply from {}: register={}, bytes={}");
         I2CEvent evt = new I2CEvent(this, register, message);
         I2CListener listener = callbacks.remove(register);
         if (listener == null) {
@@ -147,6 +156,9 @@ public class FirmataI2CDevice implements I2CDevice {
              * waiting one-shot listener.
              */
             listener = callbacks.remove(REGISTER_NOT_SET);
+            if (listener != null) {
+                LOGGER.debug("Matched reply register {} to pending register-less read from {}", register, this);
+            }
         }
         if (listener == null) {
             for (I2CListener subscriber : subscribers) {

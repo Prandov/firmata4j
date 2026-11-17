@@ -32,7 +32,7 @@ public class Bmp280 {
         // 1. Tell the chip.
         try{
             theBMPdevice.tell(Bmp280Token.BMP280_ID_ASK);
-            System.out.println("I2C telling...");
+            LOGGER.debug("Sent BMP280 chip ID register selection to {}", theBMPdevice);
         }        catch (IOException e){
             throw new RuntimeException(e);
         }
@@ -43,14 +43,14 @@ public class Bmp280 {
         // 3. listen.  (ask)
         try {
             theBMPdevice.ask((byte)1, myI2CListener);
-            System.out.println("I2C asking...");
+            LOGGER.debug("Requested one BMP280 chip ID byte from {}", theBMPdevice);
 
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         Thread.sleep(20);
-        System.out.println("The BMP280 address: (after asking...): 0x" + toHexString(theBMPdevice.getAddress()));
+        LOGGER.debug("BMP280 ID request completed at address 0x{}", toHexString(theBMPdevice.getAddress()));
 
     }
 

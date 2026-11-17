@@ -467,6 +467,7 @@ public class FirmataDevice implements IODevice {
                 LOGGER.error("Cannot enable reporting from device", ex);
             }
             ready.set(true);
+            LOGGER.info("Firmata initialized: {}", getProtocol());
             // all the pins are initialized so notification is sent to listeners
             IOEvent initIsDone = new IOEvent(FirmataDevice.this);
             for (IODeviceEventListener l : listeners) {

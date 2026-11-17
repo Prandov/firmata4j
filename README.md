@@ -20,7 +20,7 @@ allows changing their mode and state
 
 ### Building This Fork
 
-This development version requires JDK 21 or newer and Maven 3.6.3 or newer.
+This development version requires JDK 21 or newer and Maven 3.9.0 or newer.
 Published historical versions shown below retain their original requirements.
 
 Set `JAVA_HOME` to your JDK installation and run:
@@ -33,6 +33,84 @@ In IntelliJ IDEA, reload the Maven project, set the Project SDK and language
 level to Java 21, and select JDK 21 for the Maven runner and importer.
 The experimental `org.firmata4j.I2CSensor` package is temporarily excluded from
 compilation while its replacement is designed.
+
+This fork uses SLF4J 2.0. Applications must supply a compatible SLF4J 2.x
+logging provider; a 1.7 binding will not work. The library depends only on the
+logging API. Tests use `slf4j-simple`; local examples can enable it through the
+optional `example-logging` profile.
+
+### Logging
+
+Library code uses SLF4J without installing a backend or changing application
+logging settings. The local `example-logging` profile adds an optional runtime
+provider, so normal library consumers do not inherit it.
+
+```sh
+mvn -Pexample-logging -Dexec.mainClass=org.firmata4j.BMP280.Bmp280Example compile exec:java
+mvn -Pexample-logging -Dexec.mainClass=org.firmata4j.SGP30.SGP30Example compile exec:java
+```
+
+INFO is the default. To see sensor commands and callback routing, add
+`-Dorg.slf4j.simpleLogger.log.org.firmata4j=debug` to the Maven command. Use
+`trace` for raw I2C and serial bytes, or `warn` to suppress routine messages.
+These settings are read when the logger initializes; restart the example after
+changing them. Logger configuration is specific to the chosen backend.
+
+In IntelliJ, enable `example-logging` under Maven > Profiles, reload Maven,
+then run an example normally. In its Run Configuration > VM options, add:
+
+```text
+-Dorg.slf4j.simpleLogger.log.org.firmata4j=debug
+-Dorg.slf4j.simpleLogger.showDateTime=true
+```
+
+For a narrower trace, use
+`-Dorg.slf4j.simpleLogger.log.org.firmata4j.SGP30=trace`. To send logs to a file,
+use `-Dorg.slf4j.simpleLogger.logFile=firmata4j.log`; the directory must exist.
+No logging properties file is bundled in the library jar. Applications may
+provide their own `simplelogger.properties` or use another SLF4J 2.x backend.
+See the [SimpleLogger settings](https://www.slf4j.org/api/org/slf4j/simple/SimpleLogger.html).
+
+| Level | Intended Use |
+| --- | --- |
+| ERROR | Failed communication or an operation that cannot complete |
+| WARN | Invalid responses, CRC mismatches, or protocol compatibility concerns |
+| INFO | Connection lifecycle, initialization, and example measurement output |
+| DEBUG | Sensor commands, parsed values, and callback routing |
+| TRACE | Raw serial/I2C bytes and CRC details |
+
+Unit tests default to INFO via `src/test/resources/simplelogger.properties`.
+Override with `mvn -Dorg.slf4j.simpleLogger.defaultLogLevel=debug test` when
+diagnosing a test. The excluded experimental `I2CSensor` package will be
+converted during its overhaul.
+
+### Tests
+
+Run hardware-independent JUnit tests with `mvn test`. These include I2C
+callback routing regressions and do not open a serial port.
+
+Hardware tests are opt-in and require the Grove Beginner Kit configured as
+Arduino Nano with StandardFirmata 2.5.7 (protocol 2.5; protocol patch 1 is
+source metadata, not reported on the wire). Close serial monitors and running
+examples before testing. Opening the port may reset the board.
+
+```sh
+# Board initialization, protocol version, and BMP280 ID at address 0x77
+mvn -Phardware-tests -Dfirmata.port=COM5 verify
+
+# Also test an attached SGP30 at 0x58 with 16 CRC-checked readings
+mvn -Phardware-tests -Dfirmata.port=COM5 -Dfirmata.sgp30=true verify
+```
+
+The combined test reads the BMP280 ID between SGP30 measurements to exercise
+both addresses. It checks transport and raw response validity, not pressure
+conversion or the SGP30 wrapper API. SGP30 is skipped unless explicitly enabled;
+missing hardware that is enabled fails the test. Responses have a two-second
+timeout, and the board connection is closed after the test group. Run hardware
+tests serially; never run multiple test processes against the same port.
+Results are in `target/surefire-reports` (unit tests) and
+`target/failsafe-reports` (hardware tests). IntelliJ can run unit tests directly;
+use the Maven commands above for hardware tests.
 
 ### Maven
 Add the following dependency to `pom.xml` of your project:
